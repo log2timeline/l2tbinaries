@@ -1,0 +1,31 @@
+environment:
+  matrix:
+  - DESCRIPTION: "Docker build"
+    TARGET: dockerfile
+    MACHINE_TYPE: "amd64"
+    APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
+    CONTAINER_NAME: "log2timeline/plaso"
+
+matrix:
+  allow_failures:
+  - TARGET: dockerfile
+
+install:
+- cmd: IF EXIST "C:\Program Files\Microsoft SDKs\Windows\v7.1\Bin\SetEnv.cmd" (
+    "C:\Program Files\Microsoft SDKs\Windows\v7.1\Bin\SetEnv.cmd" /x86 /release )
+- ps: If ($env:TARGET -eq "dockerfile") {
+    $ProgressPreference = "SilentlyContinue"; Invoke-WebRequest -Uri "https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe" -Outfile "..\Docker Desktop Installer.exe";
+    Start-Process "..\Docker Desktop Installer.exe" -Wait -ArgumentList "install --accept-license --quiet";
+    Start-Process "C:\Program Files\Docker\Docker\Docker Desktop.exe";
+    Start-Sleep -Seconds 60 }
+- cmd: IF [%TARGET%]==[dockerfile] (
+    docker version &&
+    docker pull "%CONTAINER_NAME%" )
+
+build: off
+
+test_script:
+- cmd: IF [%TARGET%]==[dockerfile] (
+    curl -L -o image.qcow2 https://github.com/log2timeline/plaso/blob/main/test_data/image.qcow2?raw=true &&
+    docker run -v "%cd%:/data" "%CONTAINER_NAME%" log2timeline --status_view linear --storage_file /data/test.plaso /data/image.qcow2 &&
+    docker run -v "%cd%:/data" "%CONTAINER_NAME%" psort --status_view linear -w /data/timeline.log /data/test.plaso )
