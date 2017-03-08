@@ -1,0 +1,19 @@
+name: test_run_plaso_docker
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: log2timeline/plaso
+    steps:
+    - name: Set up container
+      run: |
+        apt-get update -q
+        apt-get install -y curl
+    - name: Download test data
+      run: |
+        curl -L -o image.qcow2 https://github.com/log2timeline/plaso/blob/main/test_data/image.qcow2?raw=true
+    - name: Run Plaso
+      run: |
+        /usr/bin/log2timeline.py --status_view linear --storage_file test.plaso image.qcow2
+        /usr/bin/psort.py --status_view linear -w timeline.log test.plaso
