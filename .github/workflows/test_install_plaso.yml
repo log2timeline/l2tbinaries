@@ -1,0 +1,105 @@
+# Test installation of Plaso.
+name: test_install_plaso
+on: [push]
+jobs:
+  test_fedora:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        version: ['43', '44']
+    container:
+      image: registry.fedoraproject.org/fedora:${{ matrix.version }}
+    steps:
+    - name: Set up container
+      run: |
+        dnf install -y dnf-plugins-core langpacks-en
+    - name: Install Plaso
+      run: |
+        TRACK=`echo ${GITHUB_REF} | sed 's?^.*/??;s?main?stable?'`;
+        dnf copr -y enable @gift/${TRACK}
+        dnf install -y curl plaso-tools python3
+    - name: Download test data
+      run: |
+        curl -L -o image.qcow2 https://github.com/log2timeline/plaso/blob/main/test_data/image.qcow2?raw=true
+    - name: Run Plaso
+      env:
+        LANG: C.utf8
+      run: |
+        /usr/bin/log2timeline.py --status_view linear --storage_file test.plaso image.qcow2
+        /usr/bin/psort.py --status_view linear -w timeline.log test.plaso
+  test_ubuntu:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        version: ['26.04']
+    container:
+      image: ubuntu:${{ matrix.version }}
+    steps:
+    - name: Set up container
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        apt update -q
+        apt install -y libterm-readline-gnu-perl locales software-properties-common
+        locale-gen en_US.UTF-8
+        ln -f -s /usr/share/zoneinfo/UTC /etc/localtime
+    - name: Install Plaso
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        TRACK=`echo ${GITHUB_REF} | sed 's?^.*/??;s?main?stable?'`;
+        add-apt-repository -y ppa:gift/${TRACK}
+        apt update -q
+        apt install -y curl plaso-tools python3
+    - name: Download test data
+      run: |
+        curl -L -o image.qcow2 https://github.com/log2timeline/plaso/blob/main/test_data/image.qcow2?raw=true
+    - name: Run Plaso
+      run: |
+        /usr/bin/log2timeline.py --status_view linear --storage_file test.plaso image.qcow2
+        /usr/bin/psort.py --status_view linear -w timeline.log test.plaso
+  test_windows:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+        - os: windows-2025
+          python-version: '3.14'
+    steps:
+    - name: Configure git
+      run: git config --global core.autocrlf false
+    - uses: actions/checkout@v6
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v6
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install pywin32 to ensure sys.platform is working as expected
+      shell: cmd
+      env:
+        PYTHON: ${{ env.pythonLocation }}
+      run: |
+        python -m pip install pywin32
+        python "%PYTHON%\Scripts\pywin32_postinstall.py" -install
+    - name: Install Plaso and dependencies
+      shell: cmd
+      env:
+        BRANCH: ${{ github.head_ref || github.ref_name }}
+      run: |
+        set "TRACK=testing"
+        if /I "%BRANCH%"=="main" set "TRACK=stable"
+        if /I "%BRANCH%"=="testing" set "TRACK=testing"
+        if /I "%BRANCH%"=="dev" set "TRACK=dev"
+        if /I "%BRANCH%"=="staging" set "TRACK=staging"
+        git clone https://github.com/log2timeline/l2tdevtools.git ..\l2tdevtools
+        set PYTHONPATH=..\l2tdevtools
+        python ..\l2tdevtools\tools\update.py --download-directory win64 --machine-type amd64 --track "%TRACK%"
+    - name: Download test data
+      run: |
+        curl -L -o image.qcow2 https://github.com/log2timeline/plaso/blob/main/test_data/image.qcow2?raw=true
+    - name: Run tests
+      shell: cmd
+      env:
+        PYTHON: ${{ env.pythonLocation }}
+      run: |
+        python "%PYTHON%\Scripts\log2timeline.exe" --status_view linear --storage_file test.plaso image.qcow2
+        python "%PYTHON%\Scripts\psort.exe" --status_view linear -w timeline.log test.plaso
