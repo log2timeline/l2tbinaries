@@ -1,0 +1,37 @@
+environment:
+  matrix:
+  - TARGET: windows_python27_32bit
+    MACHINE_TYPE: "x86"
+    PYTHON: "C:\\Python27"
+  - TARGET: windows_python27_64bit
+    MACHINE_TYPE: "amd64"
+    PYTHON: "C:\\Python27-x64"
+  - TARGET: windows_python36_32bit
+    MACHINE_TYPE: "x86"
+    PYTHON: "C:\\Python36"
+  - TARGET: windows_python36_64bit
+    MACHINE_TYPE: "amd64"
+    PYTHON: "C:\\Python36-x64"
+  - TARGET: ubuntu_xenial_python27
+    APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu
+    APPVEYOR_YML_DISABLE_PS_LINUX: true
+  - TARGET: ubuntu_bionic_python27
+    APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu1804
+    APPVEYOR_YML_DISABLE_PS_LINUX: true
+
+install:
+- cmd: '"C:\Program Files\Microsoft SDKs\Windows\v7.1\Bin\SetEnv.cmd" /x86 /release'
+- cmd: "%PYTHON%\\python.exe -m pip install --upgrade pip"
+- cmd: "%PYTHON%\\python.exe -m pip install pypiwin32 WMI"
+- cmd: "%PYTHON%\\python.exe %PYTHON%\\Scripts\\pywin32_postinstall.py -install"
+- cmd: git clone https://github.com/log2timeline/l2tdevtools.git ..\l2tdevtools
+- cmd: if [%APPVEYOR_REPO_BRANCH%]==[master] ( set TRACK=stable ) else ( set TRACK=%APPVEYOR_REPO_BRANCH% )
+- cmd: mkdir dependencies && set PYTHONPATH=..\l2tdevtools && "%PYTHON%\\python.exe" ..\l2tdevtools\tools\update.py --download-directory dependencies --machine-type %MACHINE_TYPE% --msi-targetdir "%PYTHON%" --track %TRACK%
+- sh: TRACK=${APPVEYOR_REPO_BRANCH/master/stable} && sudo add-apt-repository ppa:gift/${TRACK} -y && sudo apt-get update -q && sudo apt-get install -y python-plaso
+
+build: off
+
+test_script:
+- git clone https://github.com/log2timeline/plaso.git
+- cmd: cd plaso && "%PYTHON%\\python.exe" utils\check_dependencies.py
+- sh: cd plaso && ./utils/check_dependencies.py

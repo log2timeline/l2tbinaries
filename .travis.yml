@@ -1,0 +1,61 @@
+matrix:
+  include:
+  - name: "Xenial with Python 2.7"
+    os: linux
+    dist: xenial
+    sudo: required
+    group: edge
+    language: python
+    python: 2.7
+    virtualenv:
+      system_site_packages: true
+  - name: "Xenial with Python 3.5"
+    os: linux
+    dist: xenial
+    sudo: required
+    group: edge
+    language: python
+    python: 3.5
+    virtualenv:
+      system_site_packages: true
+  - name: "MacOS with Python 2.7.10"
+    os: osx
+    language: generic
+    env: PYTHONPATH=/Library/Python/2.7/site-packages/
+  - name: "Pylint for Python 2.7 on Trusty"
+    env: TARGET="pylint2"
+    os: linux
+    dist: trusty
+    sudo: required
+    group: edge
+    language: python
+    python: 2.7
+    virtualenv:
+      system_site_packages: true
+  - name: "Pylint for Python 2.7 on Xenial"
+    env: TARGET="pylint2"
+    os: linux
+    dist: xenial
+    sudo: required
+    group: edge
+    language: python
+    python: 2.7
+    virtualenv:
+      system_site_packages: true
+install:
+- if test "${TARGET}" != "pylint2"; then
+    ./utils/travis.sh;
+  fi
+script:
+- git clone https://github.com/log2timeline/plaso.git
+- if test "${TARGET}" = "pylint2"; then
+    sudo add-apt-repository ppa:gift/pylint2 -y;
+    sudo apt-get update -q;
+    sudo apt-get install -y pylint;
+    pylint --version;
+    (cd plaso && find plaso/lib -name \*.py -exec pylint --rcfile=${PWD}/.pylintrc {} \;);
+  elif test ${TRAVIS_OS_NAME} = "osx"; then
+    cd plaso && /System/Library/Frameworks/Python.framework/Versions/2.7/bin/python ./utils/check_dependencies.py;
+  else
+    cd plaso && ./utils/check_dependencies.py;
+  fi
