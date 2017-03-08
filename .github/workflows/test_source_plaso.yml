@@ -1,0 +1,43 @@
+# Install Plaso from source on Ubuntu Docker images using GIFT PPA
+name: test_source_plaso
+on: [push]
+jobs:
+  test_ubuntu:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        version: ['18.04', '20.04']
+    container:
+      image: ubuntu:${{ matrix.version }}
+    steps:
+    - name: Set up container
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        apt-get update -q
+        apt-get install -y libterm-readline-gnu-perl locales software-properties-common
+        locale-gen en_US.UTF-8
+        ln -f -s /usr/share/zoneinfo/UTC /etc/localtime
+    - name: Install dependencies
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        TRACK=`echo ${GITHUB_REF} | sed 's?^.*/??;s?main?stable?'`;
+        add-apt-repository -y ppa:gift/${TRACK}
+        apt-get update -q
+        apt-get install -y git python3
+        DEPENDENCIES=`apt-cache depends python3-plaso | grep Depends | sed "s/.*ends:[ ]//;s/^[<][^<]*[>]$//" | tr '\n' ' '`;
+        apt-get install -y ${DEPENDENCIES}
+    - name: Download Plaso source
+      run: |
+        BRANCH=`echo ${GITHUB_REF} | sed 's?^.*/??'`
+        if test ${BRANCH} = "main"; then \
+          LATEST_TAG=`git ls-remote --tags https://github.com/log2timeline/plaso.git | sort -k2 | tail -n1 | sed 's?^.*refs/tags/??'` && git clone -b ${LATEST_TAG} https://github.com/log2timeline/plaso.git; \
+        else \
+          git clone https://github.com/log2timeline/plaso.git; \
+        fi
+    - name: Run Plaso
+      run: |
+        cd plaso
+        PYTHONPATH=. python3 tools/log2timeline.py --status_view linear test.plaso test_data/image.qcow2
+        PYTHONPATH=. python3 tools/psort.py --status_view linear -w timeline.log test.plaso
