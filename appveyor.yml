@@ -1,0 +1,66 @@
+environment:
+  matrix:
+  - DESCRIPTION: "l2tbinaries builds on Windows with Python 3.12 32-bit"
+    TARGET: l2tbinaries
+    APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
+    MACHINE_TYPE: "x86"
+    PYTHON: "C:\\Python312"
+  - DESCRIPTION: "l2tbinaries builds on Windows with Python 3.12 64-bit"
+    TARGET: l2tbinaries
+    APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
+    MACHINE_TYPE: "amd64"
+    PYTHON: "C:\\Python312-x64"
+  - DESCRIPTION: "Source on Windows with Python 3.12 32-bit"
+    TARGET: gitsource_plaso
+    APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
+    MACHINE_TYPE: "x86"
+    PYTHON: "C:\\Python312"
+  - DESCRIPTION: "Source on Windows with Python 3.12 64-bit"
+    TARGET: gitsource_plaso
+    APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
+    MACHINE_TYPE: "amd64"
+    PYTHON: "C:\\Python312-x64"
+  - DESCRIPTION: "Source on Mac OS with Python 3.12"
+    BUILD_ENVIRONMENT: python
+    APPVEYOR_BUILD_WORKER_IMAGE: macos-monterey
+    HOMEBREW_NO_INSTALL_CLEANUP: 1
+    PYTHON_VERSION: "3.12"
+  - DESCRIPTION: "Docker build"
+    TARGET: dockerfile
+    MACHINE_TYPE: "amd64"
+    APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
+    CONTAINER_NAME: "log2timeline/plaso"
+
+matrix:
+  allow_failures:
+  - TARGET: dockerfile
+
+install:
+- cmd: IF EXIST "C:\Program Files\Microsoft SDKs\Windows\v7.1\Bin\SetEnv.cmd" (
+    "C:\Program Files\Microsoft SDKs\Windows\v7.1\Bin\SetEnv.cmd" /x86 /release )
+- cmd: IF NOT [%TARGET%]==[dockerfile] (
+    "%PYTHON%\\python.exe" -m pip install --upgrade pip &&
+    "%PYTHON%\\python.exe" -m pip install pywin32 WMI &&
+    "%PYTHON%\\python.exe" %PYTHON%\\Scripts\\pywin32_postinstall.py -install )
+- ps: If ($env:TARGET -ne "dockerfile" -And $isWindows) {
+    .\config\appveyor\install.ps1 }
+- sh: config/appveyor/install.sh
+- ps: If ($env:TARGET -eq "dockerfile") {
+    $ProgressPreference = "SilentlyContinue"; Invoke-WebRequest -Uri "https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe" -Outfile "..\Docker Desktop Installer.exe";
+    Start-Process "..\Docker Desktop Installer.exe" -Wait -ArgumentList "install --accept-license --quiet";
+    Start-Process "C:\Program Files\Docker\Docker\Docker Desktop.exe";
+    Start-Sleep -Seconds 60 }
+- cmd: IF [%TARGET%]==[dockerfile] (
+    docker version &&
+    docker pull "%CONTAINER_NAME%" )
+
+build: off
+
+test_script:
+- ps: If ($env:TARGET -ne "dockerfile" -And $isWindows) {
+    .\config\appveyor\runtests.ps1 }
+- sh: config/appveyor/runtests.sh
+- cmd: IF [%TARGET%]==[dockerfile] (
+    curl -L -o image.qcow2 https://github.com/log2timeline/plaso/blob/main/test_data/image.qcow2?raw=true &&
+    docker run -v "%cd%:/data" "%CONTAINER_NAME%" log2timeline --status_view linear --storage_file /data/test.plaso /data/image.qcow2 &&
+    docker run -v "%cd%:/data" "%CONTAINER_NAME%" psort --status_view linear -w /data/timeline.log /data/test.plaso )
