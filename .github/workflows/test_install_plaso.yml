@@ -1,0 +1,60 @@
+# Install Plaso on Fedora and Ubuntu Docker images using GIFT CORP and GIFT PPA
+name: test_install_plaso
+on: [push]
+jobs:
+  test_fedora:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        version: ['38', '39', '40']
+    container:
+      image: registry.fedoraproject.org/fedora:${{ matrix.version }}
+    steps:
+    - name: Set up container
+      run: |
+        dnf install -y dnf-plugins-core langpacks-en
+    - name: Install Plaso
+      run: |
+        TRACK=`echo ${GITHUB_REF} | sed 's?^.*/??;s?main?stable?'`;
+        dnf copr -y enable @gift/${TRACK}
+        dnf install -y curl plaso-tools python3
+    - name: Download test data
+      run: |
+        curl -L -o image.qcow2 https://github.com/log2timeline/plaso/blob/main/test_data/image.qcow2?raw=true
+    - name: Run Plaso
+      env:
+        LANG: C.utf8
+      run: |
+        /usr/bin/log2timeline.py --status_view linear --storage_file test.plaso image.qcow2
+        /usr/bin/psort.py --status_view linear -w timeline.log test.plaso
+  test_ubuntu:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        version: ['24.04']
+    container:
+      image: ubuntu:${{ matrix.version }}
+    steps:
+    - name: Set up container
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        apt-get update -q
+        apt-get install -y libterm-readline-gnu-perl locales software-properties-common
+        locale-gen en_US.UTF-8
+        ln -f -s /usr/share/zoneinfo/UTC /etc/localtime
+    - name: Install Plaso
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        TRACK=`echo ${GITHUB_REF} | sed 's?^.*/??;s?main?stable?'`;
+        add-apt-repository -y ppa:gift/${TRACK}
+        apt-get update -q
+        apt-get install -y curl plaso-tools python3
+    - name: Download test data
+      run: |
+        curl -L -o image.qcow2 https://github.com/log2timeline/plaso/blob/main/test_data/image.qcow2?raw=true
+    - name: Run Plaso
+      run: |
+        /usr/bin/log2timeline.py --status_view linear --storage_file test.plaso image.qcow2
+        /usr/bin/psort.py --status_view linear -w timeline.log test.plaso
