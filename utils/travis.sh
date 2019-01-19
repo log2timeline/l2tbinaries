@@ -21,6 +21,27 @@ then
 		sudo /usr/bin/hdiutil detach /Volumes/${PACKAGE}-*.pkg
 	done
 
+elif test -n "${FEDORA_VERSION}";
+then
+	CONTAINER_NAME="fedora${FEDORA_VERSION}";
+
+	docker pull registry.fedoraproject.org/fedora:${FEDORA_VERSION};
+
+	docker run --name=${CONTAINER_NAME} --detach -i registry.fedoraproject.org/fedora:${FEDORA_VERSION};
+
+	docker exec ${CONTAINER_NAME} dnf install -y dnf-plugins-core;
+
+	TRACK=${TRAVIS_BRANCH/master/stable};
+
+	docker exec ${CONTAINER_NAME} dnf copr -y enable @gift/${TRACK};
+
+	if test ${TRAVIS_PYTHON_VERSION} = "2.7";
+	then
+		docker exec ${CONTAINER_NAME} dnf install -y git python2 python2-plaso;
+	else
+		docker exec ${CONTAINER_NAME} dnf install -y git python3 python3-plaso;
+	fi
+
 elif test ${TRAVIS_OS_NAME} = "linux";
 then
 	TRACK=${TRAVIS_BRANCH/master/stable};
